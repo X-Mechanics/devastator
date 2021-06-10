@@ -1,0 +1,9 @@
+{
+  "optim": "adam",
+  "mom": 0.0,
+  "lr": 0.00025,
+  "scheduler": "cosine",
+  "warmup_step": 0,
+  "max_step": 200000,
+  "eta_min": 0.0
+}
