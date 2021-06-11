@@ -1,8 +1,8 @@
 {
   "data": "test_data/blur/wikitext-103",
   "dataset": "wt103",
-  "batch_size": 24,
-  "batch_chunk": 6,
+  "batch_size": 8,
+  "batch_chunk": 4,
   "max_step": 200000,
   "seed": 1111,
   "work_dir": "LM-TFM",

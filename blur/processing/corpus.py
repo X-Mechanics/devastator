@@ -1,10 +1,8 @@
 import os
 import glob
-
 import torch
 
 from blur.processing.vocabulary import Vocab
-from blur.training.iterator import LMOrderedIterator, LMShuffledIterator, LMMultiFileIterator
 
 class Corpus(object):
     def __init__(self, path, dataset, **kwargs):
@@ -35,22 +33,6 @@ class Corpus(object):
                 os.path.join(path, 'valid.txt'), ordered=False, add_double_eos=True)
             self.test  = self.vocab.encode_file(
                 os.path.join(path, 'test.txt'), ordered=False, add_double_eos=True)
-
-    def get_iterator(self, split, *args, **kwargs):
-        if split == 'train':
-            if self.dataset == 'wt103':
-                data_iter = LMOrderedIterator(self.train, *args, **kwargs)
-            elif self.dataset == 'lm1b':
-                kwargs['shuffle'] = True
-                data_iter = LMMultiFileIterator(self.train, self.vocab, *args, **kwargs)
-        elif split in ['valid', 'test']:
-            data = self.valid if split == 'valid' else self.test
-            if self.dataset == 'wt103':
-                data_iter = LMOrderedIterator(data, *args, **kwargs)
-            elif self.dataset == 'lm1b':
-                data_iter = LMShuffledIterator(data, *args, **kwargs)
-
-        return data_iter
 
 
 def make_corpus_kwargs(datadir, dataset):
