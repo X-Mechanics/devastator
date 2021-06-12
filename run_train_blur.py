@@ -49,13 +49,14 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
             timeout=datetime.timedelta(0, 30)
         )
         print('finished initializing...')
-        model = nn.parallel.DistributedDataParallel(model, device_ids=[gpu], find_unused_parameters=True)
+        mod = nn.parallel.DistributedDataParallel(model, device_ids=[gpu], find_unused_parameters=True)
 
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_set, num_replicas=args.world_size, rank=rank)
         valid_sampler = torch.utils.data.distributed.DistributedSampler(
             valid_set, num_replicas=args.world_size, rank=rank)
     else:
+        mod = model
         train_sampler, valid_sampler = None, None
 
     train_loader = torch.utils.data.DataLoader(
@@ -88,7 +89,7 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
             target = target.cuda(non_blocking=True)
             model.zero_grad()
 
-            output = model(data, target, mems)
+            output = mod(data, target, mems)
             loss = output['loss'].mean()
             mems = output['mems']
 
@@ -144,7 +145,7 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
 
                         if config_run.max_eval_steps > 0 and i >= config_run.max_eval_steps:
                             break
-                        output = model(data, target, mems)
+                        output = mod(data, target, mems)
                         loss = output['loss'].mean()
                         mems = output['mems']
                         seq_len = model.tgt_len
