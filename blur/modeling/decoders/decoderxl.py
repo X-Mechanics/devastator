@@ -57,12 +57,14 @@ class DecoderXL(nn.Module):
                 dec_inp.new_ones(qlen, klen), diagonal=1+mlen).bool()[:,:,None]
         return dec_attn_mask
 
-    def forward(self, dec_inp, pos_emb, mems):
+    def forward(self, dec_inp, pos_emb, mems, dec_attn_mask=None):
         qlen, _, _ = dec_inp.size()
         mlen = mems[0].size(0) if mems is not None else 0
         klen = mlen + qlen
 
-        dec_attn_mask = self.make_mask(dec_inp, qlen, mlen, klen)
+        if dec_attn_mask is None:
+            dec_attn_mask = self.make_mask(dec_inp, qlen, mlen, klen)
+            
         dec_inp, pos_emb = self.drop(dec_inp), self.drop(pos_emb)
 
         hidden = []

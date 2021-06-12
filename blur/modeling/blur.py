@@ -82,7 +82,7 @@ class Blur(nn.Module):
         output = self.lm_loss(pred_hid.view(-1, pred_hid.size(-1)), target.view(-1))
         return -output.output.view(tgt_len, -1)
 
-    def forward(self, data, target, mems, output_hidden_states=False):
+    def forward(self, data, target, mems, dec_attn_mask=None, output_hidden_states=False):
         # nn.DataParallel does not allow size(0) tensors to be broadcasted.
         # So, have to initialize size(0) mems inside the model forward.
         # Moreover, have to return new_mems to allow nn.DataParallel to piece
@@ -101,7 +101,7 @@ class Blur(nn.Module):
         pos_emb = self.pos_emb(pos_seq)
         dec_inp = self.encoder(data)
 
-        dec_outp = self.decoder(dec_inp, pos_emb, mems=mems)
+        dec_outp = self.decoder(dec_inp, pos_emb, mems=mems, dec_attn_mask=dec_attn_mask)
 
         output = {
             'output': dec_outp['output'],
