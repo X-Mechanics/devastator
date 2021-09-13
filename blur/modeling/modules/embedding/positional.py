@@ -18,7 +18,7 @@ class PositionalEmbedding(nn.Module):
         return pos_seq
 
     def forward(self, pos_seq, bsz: int=None):
-        sinusoid_inp = torch.ger(pos_seq, self.inv_freq)
+        sinusoid_inp = torch.ger(pos_seq, self.inv_freq.to(pos_seq.device))
         pos_emb = torch.cat([sinusoid_inp.sin(), sinusoid_inp.cos()], dim=-1)
 
         if bsz is not None:

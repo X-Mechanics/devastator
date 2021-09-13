@@ -87,7 +87,8 @@ class Blur(nn.Module):
         # So, have to initialize size(0) mems inside the model forward.
         # Moreover, have to return new_mems to allow nn.DataParallel to piece
         # them together.
-        if not mems:
+        if mems is None or len(mems)==0:
+        # if not mems:
             mems = self._init_mems(device=data.device)
 
         data = self._batch_first(data).contiguous()
