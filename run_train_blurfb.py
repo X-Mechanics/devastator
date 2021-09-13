@@ -11,6 +11,9 @@ from blur.processing import get_lm_corpus
 from blur.training.stream_dataset import StreamDataset, StreamCollator
 from blur.modeling.decoders.decoderft import DecoderFT
 
+from blur.modeling.blurfb import BlurFb
+from blur.modeling.decoders.decoderfb import DecoderFb
+
 import time
 import math
 import itertools
@@ -18,14 +21,14 @@ from tqdm import tqdm
 import datetime
 
 def train(gpu, args, config_run, config_model, config_encoder, config_decoder, config_optim):
-    gpu=1
+
     corpus = get_lm_corpus(config_run.data, config_run.dataset)
     config_encoder.n_classes = len(corpus.vocab)
 
-    model = Blur(
+    model = BlurFb(
         **config_model.parameters(),
         encoder=AdaptiveInput(**config_encoder.parameters()),
-        decoder=DecoderXL(**config_decoder.parameters()),
+        decoder=DecoderFb(**config_decoder.parameters()),
         lm_loss=AdaptiveLogSoftmaxWithLoss(**config_encoder.parameters()),
     )
     model.to(gpu)
@@ -116,7 +119,7 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
             train_step += 1
             optimizer.update(train_step)
 
-            if gpu == 1 and train_step % config_run.log_interval == 0:
+            if gpu == 0 and train_step % config_run.log_interval == 0:
                 cur_loss = train_loss / (config_run.log_interval * config_run.batch_chunk)
                 elapsed = time.time() - log_start_time
                 log_str = '| epoch {:3d} step {:>8d} | lr {:.3g} | ms/batch {:5.2f} | loss {:5.2f}'.format(
@@ -127,7 +130,7 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
                 train_loss = 0
                 log_start_time = time.time()
 
-            if gpu == 1 and train_step % config_run.eval_interval == 0:
+            if gpu == 0 and train_step % config_run.eval_interval == 0:
                 model.eval()
 
                 tgt_len, mem_len, ext_len = model.tgt_len, model.mem_len, model.ext_len
@@ -274,7 +277,7 @@ def main():
     # Load config files
     ###############################################################################
 
-    config_model = Config(**{"tgt_len": 150, "mem_len": 300, "ext_len": 0})
+    config_model = Config(**{"tgt_len": 300, "mem_len": 50, "ext_len": 0})
     config_run = init_config_run(config_run=Config.from_json(config_run_path), config_model=config_model)
     config_encoder = Config.from_json(config_encoder_path)
     config_decoder = Config.from_json(config_decoder_path)
@@ -321,6 +324,7 @@ def main():
 
     config_run.batch_size = args.batch_size
     config_run.multi_gpu = args.multi_gpu
+    config_decoder.n_layer = 8
     print(config_run.multi_gpu, args.multi_gpu, args.batch_size)
     if not args.multi_gpu:
         args.gpus = 1

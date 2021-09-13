@@ -1,16 +1,17 @@
 import torch
 import torch.nn as nn
-from blur.modeling.modules import PositionalEmbedding
 from blur.modeling.initializers import weights_init
+from blur.modeling.decoders.decoderfb import RelativePositionBias, Memory, exists
 
-class Blur(nn.Module):
+
+class BlurFb(nn.Module):
     def __init__(self, tgt_len, mem_len, ext_len, encoder, decoder, lm_loss, tie_weight=True, clamp_len=-1):
-        super(Blur, self).__init__()
+        super(BlurFb, self).__init__()
         self.tgt_len = tgt_len
         self.mem_len = mem_len
         self.ext_len = ext_len
 
-        self.pos_emb = PositionalEmbedding(demb=encoder.d_model, clamp_len=clamp_len)
+        self.pos_emb = RelativePositionBias(causal=True, heads=decoder.n_head)
         self.encoder = encoder
         self.decoder = decoder
         self.lm_loss = lm_loss
@@ -23,6 +24,9 @@ class Blur(nn.Module):
 
     def _batch_first(self, t):
         return torch.einsum('i...k->k...i', t)
+
+    def _seq_first(self, t):
+        return torch.einsum('ik...->ki...', t)
 
     def _init_weights(self):
         self.apply(weights_init)
@@ -69,7 +73,6 @@ class Blur(nn.Module):
             end_idx = mlen + max(0, qlen - 0 - self.ext_len)
             beg_idx = max(0, end_idx - self.mem_len)
             for i in range(len(hids)):
-
                 cat = torch.cat([mems[i], hids[i]], dim=0)
                 new_mems.append(cat[beg_idx:end_idx].detach())
 
@@ -82,34 +85,44 @@ class Blur(nn.Module):
         output = self.lm_loss(pred_hid.view(-1, pred_hid.size(-1)), target.view(-1))
         return -output.output.view(tgt_len, -1)
 
-    def forward(self, data, target, mems, dec_attn_mask=None, output_hidden_states=False):
-        # nn.DataParallel does not allow size(0) tensors to be broadcasted.
-        # So, have to initialize size(0) mems inside the model forward.
-        # Moreover, have to return new_mems to allow nn.DataParallel to piece
-        # them together.
-        if mems is None or len(mems)==0:
-        # if not mems:
-            mems = self._init_mems(device=data.device)
-        data = self._batch_first(data).contiguous()
-        target = self._batch_first(target).contiguous()
-        qlen, _ = data.size()
-        mlen = mems[0].size(0) if mems is not None else 0
-        klen = mlen + qlen
+    def forward(self, x, target, memory=None, return_memory=False):
+        b, n, device = *x.shape, x.device
 
-        pos_seq = self.pos_emb.get_seq(klen=klen, device=data.device, dtype=data.dtype)
-        pos_emb = self.pos_emb(pos_seq)
-        dec_inp = self.encoder(data)
+        x = self.encoder(x)
+
+        memory_keys = None
+        memory_values = None
+
+        if exists(memory) and len(memory) == 2:
+            memory_keys, memory_values = memory
+
+        outputs = []
+
+        # calculate weighting of layers for storing to memory
+        layer_weight = self.decoder.get_layer_weight()
+
+        for x in x.split(self.mem_len, dim=1):
+            dec_outp = self.decoder(
+                dec_inp=x, pos_emb=self.pos_emb,
+                mems=Memory(memory_keys, memory_values),
+                layer_weight=layer_weight
+            )
+            x = dec_outp['output']
+            agg_hiddens = dec_outp['agg_hiddens']
+            memory_keys, memory_values = dec_outp['mems']
+
+            outputs.append(x)
+
+        x = torch.cat((outputs), dim=1)
 
 
-        dec_outp = self.decoder(dec_inp, pos_emb, mems=mems, dec_attn_mask=dec_attn_mask)
         output = {
-            'output': dec_outp['output'],
-            'mems': self._update_mems(dec_outp['hidden_states'], mems, qlen, mlen),
-            'loss': self.compute_loss(dec_outp['output'], target)
+            'output': self._seq_first(x),
+            'mems': None,
+            'loss': self._batch_first(self.compute_loss(x, target))
         }
 
-        if output_hidden_states:
-            output['hidden_states'] = dec_outp['hidden_states']
+        if return_memory:
+            output['mems'] = Memory(memory_keys, memory_values)
 
         return output
-
