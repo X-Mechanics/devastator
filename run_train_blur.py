@@ -9,6 +9,7 @@ from blur import init_config_run, create_exp_dir, Config, Trainer, ScheduledOpti
 from blur import Blur, DecoderXL, AdaptiveInput, AdaptiveLogSoftmaxWithLoss
 from blur.processing import get_lm_corpus
 from blur.training.stream_dataset import StreamDataset, StreamCollator
+from blur.modeling.decoders.decoderft import DecoderFT
 
 import time
 import math
@@ -17,7 +18,6 @@ from tqdm import tqdm
 import datetime
 
 def train(gpu, args, config_run, config_model, config_encoder, config_decoder, config_optim):
-    device = torch.device('cuda:1' if config_run.cuda and torch.cuda.is_available() else 'cpu')
 
     corpus = get_lm_corpus(config_run.data, config_run.dataset)
     config_encoder.n_classes = len(corpus.vocab)
@@ -28,7 +28,7 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
         decoder=DecoderXL(**config_decoder.parameters()),
         lm_loss=AdaptiveLogSoftmaxWithLoss(**config_encoder.parameters()),
     )
-    model.to(device)
+    model.to(gpu)
 
     train_set = StreamDataset(
         data=corpus.train, tgt_len=model.tgt_len, batch_size=config_run.batch_size)
@@ -45,8 +45,8 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
         rank = args.nr * args.gpus + gpu
         print('initializing disitrbuted training...', args.world_size, rank)
         dist.init_process_group(
-            backend='nccl', init_method='env://', world_size=args.world_size, rank=rank,
-            timeout=datetime.timedelta(0, 30)
+            backend='gloo', init_method='env://', world_size=args.world_size, rank=rank,
+            timeout=datetime.timedelta(0, 10)
         )
         print('finished initializing...')
         mod = nn.parallel.DistributedDataParallel(model, device_ids=[gpu], find_unused_parameters=True)
@@ -69,7 +69,9 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
     optimizer = ScheduledOptimizer(config=config_optim, model=model)
 
     n_all_param = sum([p.nelement() for p in model.parameters()])
+    n_nonemb_param = sum([p.nelement() for p in model.decoder.layers.parameters()])
     print('#params = {}'.format(n_all_param))
+    print('#non emb params = {}'.format(n_nonemb_param))
 
     train_step = 0
     train_loss = 0
@@ -78,43 +80,44 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
     eval_start_time = time.time()
 
     for epoch in itertools.count(start=1):
-        epoch = epoch
+        if isinstance(train_loader.sampler, torch.utils.data.distributed.DistributedSampler):
+            train_loader.sampler.set_epoch(epoch)
 
         config_run.logging('training epoch {}...'.format(epoch))
 
         ret = True
         model.train()
 
-        mems = tuple()
+        if config_run.batch_chunk > 1:
+            mems = [tuple() for _ in range(config_run.batch_chunk)]
+        else:
+            mems = tuple()
 
         for batch, (data, target) in enumerate(tqdm(train_loader)):
-            data = data.to(device)
-            target = target.to(device)
             model.zero_grad()
 
+            data = data.to(gpu)
+            target = target.to(gpu)
             output = mod(data, target, mems)
             loss = output['loss'].mean()
             mems = output['mems']
 
             if config_run.fp16:
                 optimizer.backward(loss)
-            else:
-                loss.backward()
-            train_loss += loss.cpu().detach().item()
-
-            if config_run.fp16:
                 optimizer.clip_master_grads(config_run.clip)
             else:
+                loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), config_run.clip)
 
+            train_loss += loss.cpu().detach().item()
             optimizer.step()
 
             # step-wise learning rate annealing
             train_step += 1
             optimizer.update(train_step)
 
-            if train_step % config_run.log_interval == 0:
-                cur_loss = train_loss / config_run.log_interval
+            if gpu == 0 and train_step % config_run.log_interval == 0:
+                cur_loss = train_loss / (config_run.log_interval * config_run.batch_chunk)
                 elapsed = time.time() - log_start_time
                 log_str = '| epoch {:3d} step {:>8d} | lr {:.3g} | ms/batch {:5.2f} | loss {:5.2f}'.format(
                     epoch, train_step, optimizer.optim.param_groups[0]['lr'],
@@ -124,8 +127,7 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
                 train_loss = 0
                 log_start_time = time.time()
 
-
-            if train_step % config_run.eval_interval == 0:
+            if gpu == 0 and train_step % config_run.eval_interval == 0:
                 model.eval()
 
                 tgt_len, mem_len, ext_len = model.tgt_len, model.mem_len, model.ext_len
@@ -143,8 +145,8 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
                 with torch.no_grad():
                     mems = tuple()
                     for i, (data, target) in enumerate(valid_loader):
-                        data = data.to(device)
-                        target  = target.to(device)
+                        #                         data = data.to(device)
+                        #                         target  = target.to(device)
 
                         if config_run.max_eval_steps > 0 and i >= config_run.max_eval_steps:
                             break
@@ -160,7 +162,6 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
                 model.train()
 
                 val_loss = total_loss / total_len
-
 
                 config_run.logging('-' * 100)
                 log_str = '| Eval {:3d} at step {:>8d} | time: {:5.2f}s | valid loss {:5.2f}'.format(
@@ -229,13 +230,35 @@ def main():
     )
 
     parser.add_argument(
+        "--batch_size",
+        default=12,
+        type=int,
+        help="Option use nn.DataParallel",
+    )
+
+    parser.add_argument(
+        "--gpus",
+        default=2,
+        type=int,
+        help="Option use nn.DataParallel",
+    )
+
+    parser.add_argument(
         "--multi_gpu",
         dest='multi_gpu',
         action='store_true',
         help="Option use nn.DataParallel",
     )
 
+    parser.add_argument(
+        "--div_value",
+        default=1,
+        type=int,
+        help="Option use nn.DataParallel",
+    )
+
     args = parser.parse_args()
+    print(args.multi_gpu, args.max_step)
 
     ###############################################################################
     # Define config paths
@@ -251,7 +274,7 @@ def main():
     # Load config files
     ###############################################################################
 
-    config_model = Config(**{"tgt_len": 150, "mem_len": 150, "ext_len": 0})
+    config_model = Config(**{"tgt_len": 150, "mem_len": 300, "ext_len": 0})
     config_run = init_config_run(config_run=Config.from_json(config_run_path), config_model=config_model)
     config_encoder = Config.from_json(config_encoder_path)
     config_decoder = Config.from_json(config_decoder_path)
@@ -261,7 +284,9 @@ def main():
     # Setup training
     ###############################################################################
 
-    create_exp_dir(config_run, scripts_to_save=['blur/modeling/blur.py'])
+    create_exp_dir(config_run, scripts_to_save=[
+        'configs/xl/config_decoder.json', 'configs/xl/config_encoder.json',
+        'configs/xl/config_run.json', 'run_train_ft.py'])
 
     np.random.seed(config_run.seed);  # Set the random seed manually
     torch.manual_seed(config_run.seed);
@@ -285,20 +310,29 @@ def main():
     if args.eval_interval is not None:
         config_run.eval_interval = args.eval_interval
 
+    # config_decoder.nft = 0
+    # config_decoder.nxl = 16
+    # config_decoder.ft_first = False
+
+    config_encoder.div_value = args.div_value
+
     args.nodes = 1
-    args.gpus = 1
     args.nr = 0
 
+    config_run.batch_size = args.batch_size
     config_run.multi_gpu = args.multi_gpu
-
+    print(config_run.multi_gpu, args.multi_gpu, args.batch_size)
+    if not args.multi_gpu:
+        args.gpus = 1
     ###############################################################################
     # Build the model
     ###############################################################################
 
-    train(-1, args, config_run, config_model, config_encoder, config_decoder, config_optim)
-#     mp.spawn(
-#         train, nprocs=args.gpus,
-#         args=(args, config_run, config_model, config_encoder, config_decoder, config_optim))
+    # train(-1, args, config_run, config_model, config_encoder, config_decoder, config_optim)
+    mp.spawn(
+        train, nprocs=args.gpus,
+        args=(args, config_run, config_model, config_encoder, config_decoder, config_optim))
+
 
 if __name__ == "__main__":
     main()

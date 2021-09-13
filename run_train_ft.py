@@ -81,8 +81,6 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
     eval_start_time = time.time()
 
     for epoch in itertools.count(start=1):
-        epoch = epoch
-
         if isinstance(train_loader.sampler, torch.utils.data.distributed.DistributedSampler):
             train_loader.sampler.set_epoch(epoch)
 
@@ -99,43 +97,20 @@ def train(gpu, args, config_run, config_model, config_encoder, config_decoder, c
         for batch, (data, target) in enumerate(tqdm(train_loader)):
             model.zero_grad()
 
-            if config_run.batch_chunk > 1:
-                data_chunks = torch.chunk(data, config_run.batch_chunk)
-                target_chunks = torch.chunk(target, config_run.batch_chunk)
-
-                for i in range(config_run.batch_chunk):
-                    # data_i = data_chunks[i].contiguous().to(device)
-                    # target_i = target_chunks[i].contiguous().to(device)
-
-                    output = mod(data_i, target_i, mems[i])
-                    loss = output['loss'].mean()
-                    mems[i] = output['mems']
-
-                    if config_run.fp16:
-                        optimizer.backward(loss)
-                    else:
-                        loss.backward()
-
-                    train_loss += loss.cpu().detach().item()
-
-            else:
-                data = data.to(gpu)
-                target = target.to(gpu)
-                output = mod(data, target, mems)
-                loss = output['loss'].mean()
-                mems = output['mems']
-
-                if config_run.fp16:
-                    optimizer.backward(loss)
-                else:
-                    loss.backward()
-                train_loss += loss.cpu().detach().item()
+            data = data.to(gpu)
+            target = target.to(gpu)
+            output = mod(data, target, mems)
+            loss = output['loss'].mean()
+            mems = output['mems']
 
             if config_run.fp16:
+                optimizer.backward(loss)
                 optimizer.clip_master_grads(config_run.clip)
             else:
+                loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), config_run.clip)
 
+            train_loss += loss.cpu().detach().item()
             optimizer.step()
 
             # step-wise learning rate annealing
