@@ -38,9 +38,6 @@ class DecoderXL(nn.Module):
             self.layers.append(
                 DecoderXLLayer(n_head, d_model, d_head, d_inner, dropout, dropatt, pre_lnorm))
 
-        self.r_w_bias = nn.Parameter(torch.Tensor(self.n_head, self.d_head))
-        self.r_r_bias = nn.Parameter(torch.Tensor(self.n_head, self.d_head))
-
 
     def make_mask(self, dec_inp, qlen, mlen, klen):
         if self.same_length:
@@ -72,9 +69,7 @@ class DecoderXL(nn.Module):
 
         for i, layer in enumerate(self.layers):
             mems_i = None if mems is None else mems[i]
-            dec_inp = layer(
-                dec_inp, pos_emb, self.r_w_bias, self.r_r_bias,
-                dec_attn_mask=dec_attn_mask, mems=mems_i)
+            dec_inp = layer(w=dec_inp, r=pos_emb, dec_attn_mask=dec_attn_mask, mems=mems_i)
             hidden.append(dec_inp)
 
         output = {
