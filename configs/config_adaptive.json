@@ -1,0 +1,11 @@
+{
+  "n_classes": null,
+  "d_model": 410,
+  "div_value": 1,
+  "cutoffs": [
+    20000,
+    40000,
+    200000
+  ],
+  "tail_drop": 0.1
+}

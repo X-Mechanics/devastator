@@ -13,9 +13,7 @@ def logging(s, log_path, print_=True, log_=True):
             f_log.write(s + '\n')
 
 
-def init_config_run(config_run, config_model):
-    if not config_model.ext_len >= 0:
-        raise ValueError('extended context length must be non-negative')
+def init_config_run(config_run):
     if not config_run.batch_size % config_run.batch_chunk == 0:
         raise ValueError('batch chunk does not divide batch size')
 

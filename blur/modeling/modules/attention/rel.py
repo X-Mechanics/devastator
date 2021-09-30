@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from torch import nn, einsum
 from einops import rearrange
 
+
 class XlPosition(nn.Module):
     def __init__(self, d_model: int, d_head: int, n_head: int, clamp_len: int=-1):
         super(XlPosition, self).__init__()
@@ -18,7 +19,8 @@ class XlPosition(nn.Module):
 
         self.register_buffer('inv_freq', self._inv_freq())
 
-    def forward(self, w_head_q, w_head_k, r, rlen):
+    def forward(self, w_head_q, w_head_k, r):
+        rlen = r.size(0)
         r_head_k = self.r_net(r)
         r_head_k = r_head_k.view(rlen, self.n_head, self.d_head)  # qlen x n_head x d_head
 
@@ -64,6 +66,7 @@ class XlPosition(nn.Module):
     def _inv_freq(self):
         inv_freq = 1 / (10000 ** (torch.arange(0.0, self.d_model, 2.0) / self.d_model))
         return inv_freq
+
 
 class RelMultiHeadAttn(nn.Module):
     def __init__(self, n_head, d_model, d_head, dropout, dropatt, pre_lnorm=False):
@@ -123,11 +126,13 @@ class RelMultiHeadAttn(nn.Module):
         #
         # # [qlen x klen x bsz x n_head]
         attn_score = einsum('i b n d, j b n d -> i j b n', w_head_q, w_head_k)
-        attn_score = attn_score + self.pos_emb(w_head_q, w_head_k, r, rlen)
+
+        attn_score = attn_score + self.pos_emb(w_head_q, w_head_k, r)
         attn_score.mul_(self.scale)
 
         #### compute attention probability
         if attn_mask is not None and attn_mask.any().item():
+            print(attn_mask.shape, attn_score.shape)
             if attn_mask.dim() == 2:
                 attn_score = attn_score.float().masked_fill(
                     attn_mask[None,:,:,None], -float('inf')).type_as(attn_score)

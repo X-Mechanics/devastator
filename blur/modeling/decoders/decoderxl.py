@@ -13,8 +13,8 @@ class DecoderXLLayer(nn.Module):
             d_model=d_model, d_inner=d_inner,
             dropout=dropout, pre_lnorm=pre_lnorm)
 
-    def forward(self, dec_inp, r, r_w_bias, r_r_bias, dec_attn_mask=None, mems=None):
-        output = self.dec_attn(dec_inp, r, r_w_bias, r_r_bias, attn_mask=dec_attn_mask, mems=mems)
+    def forward(self, dec_inp, r, dec_attn_mask=None, mems=None):
+        output = self.dec_attn(dec_inp, r, attn_mask=dec_attn_mask, mems=mems)
         output = self.pos_ff(output)
 
         return output
@@ -69,7 +69,7 @@ class DecoderXL(nn.Module):
 
         for i, layer in enumerate(self.layers):
             mems_i = None if mems is None else mems[i]
-            dec_inp = layer(w=dec_inp, r=pos_emb, dec_attn_mask=dec_attn_mask, mems=mems_i)
+            dec_inp = layer(dec_inp, pos_emb, dec_attn_mask=dec_attn_mask, mems=mems_i)
             hidden.append(dec_inp)
 
         output = {

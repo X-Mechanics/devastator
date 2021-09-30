@@ -54,9 +54,9 @@ def weights_init(m):
         if hasattr(m, 'r_emb'):
             init_weight(m.r_emb)
         if hasattr(m, 'r_w_bias'):
-            init_weight(m.r_w_bias)
+            init_weight(m.r_k)
         if hasattr(m, 'r_r_bias'):
-            init_weight(m.r_r_bias)
+            init_weight(m.r_r)
         if hasattr(m, 'r_bias'):
             init_bias(m.r_bias)
 
