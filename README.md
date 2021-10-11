@@ -13,18 +13,35 @@ data types.
 
 ## Quickstart
 
-### Reproduce a perplexity score PPL~28.0 on `wikitext-103`
+### Reproducing [Wikitext-103 benchmarks](https://paperswithcode.com/sota/language-modelling-on-wikitext-103)
 
 - Download the wikitext-103 dataset
 
 ```bash
-user@device$ ./get_blur_data.sh
+user@device$ cd download_path/devastator/
+user@device:/devastator$ ./get_data_wt103.sh
 ```
 
-- Run training script
-
+- To reproduce the result from [Transformer-XL](http://arxiv.org/abs/1901.02860) (ppl ~ 24)
+  
 ```bash
-user@device$ python run_train_blur.py
+user@device:/devastator$ cd blur
+user@device:/devastator/blur$ ./run_train_wt103_base.sh
 ```
 
-- Compare with benchmarks: https://paperswithcode.com/sota/language-modelling-on-wikitext-103
+
+- To reproduce the result from [FNetAR](http://arxiv.org/abs/2107.10932) (ppl ~ 25)
+  
+```bash
+user@device:/devastator$ cd blur
+user@device:/devastator/blur$ ./run_train_wt103_base_fnetar.sh
+```
+
+- To reproduce the result from [Feedback Transformer](http://arxiv.org/abs/2002.09402) (ppl < 21)
+  
+```bash
+user@device:/devastator$ cd blur
+user@device:/devastator/blur$ ./run_train_wt103_base_feedback.sh
+```
+
+ 
