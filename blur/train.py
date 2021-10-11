@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 
+from tqdm import tqdm
 
 from blur import Blur
 from modules.xlmemories import XlMemories
@@ -139,7 +140,7 @@ if torch.cuda.is_available():
     else:
         torch.cuda.manual_seed_all(args.seed)
 
-device = torch.device('cuda:1' if args.cuda else 'cpu')
+device = torch.device('cuda' if args.cuda else 'cpu')
 
 ###############################################################################
 # Load data
@@ -267,7 +268,7 @@ def train():
     )
 
     train_iter = tr_iter
-    for batch, (data, target, seq_len) in enumerate(train_iter):
+    for batch, (data, target, seq_len) in tqdm(enumerate(train_iter), total=len(train_iter)):
         model.zero_grad()
 
         data_chunks = torch.chunk(data, args.batch_chunk, 0)
