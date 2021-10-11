@@ -252,7 +252,7 @@ def train():
     memories = FeedbackMemories(n_stream=args.batch_chunk)
 
     train_iter = tr_iter
-    for batch, (data, target, seq_len) in tqdm(enumerate(train_iter), total=len(train_iter)):
+    for batch, (data, target, seq_len) in tqdm(enumerate(train_iter), total=len(train_iter) // args.batch_chunk):
         model.zero_grad()
 
         data_chunks = torch.chunk(data, args.batch_chunk, 0)
