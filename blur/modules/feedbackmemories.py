@@ -10,10 +10,7 @@ class FeedbackMemories(nn.Module):
     ):
         super(FeedbackMemories, self).__init__()
 
-        self.memories = [
-            FeedbackMemory(None, None)
-            for _ in range(n_stream)
-        ]
+        self.memories = [FeedbackMemory(None, None)for _ in range(n_stream)]
 
     def __len__(self):
         return len(self.memories)

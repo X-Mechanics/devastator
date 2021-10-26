@@ -84,7 +84,7 @@ parser.add_argument('--mem_len', type=int, default=0,
                     help='length of the retained previous heads')
 parser.add_argument('--not_tied', action='store_true',
                     help='do not tie the word embedding and softmax weights')
-parser.add_argument('--seed', type=int, default=1111,
+parser.add_argument('--seed', type=int, default=1234,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
@@ -167,7 +167,7 @@ if args.adaptive:
 ###############################################################################
 # Build the model
 ###############################################################################
-
+from xlinitializer import XlInitializer
 
 model = BlurFeedback(
     ntokens, args.n_layer, args.n_head, args.d_model,
@@ -176,9 +176,9 @@ model = BlurFeedback(
     tgt_len=args.tgt_len, ext_len=args.ext_len, mem_len=args.mem_len,
     cutoffs=cutoffs, same_length=args.same_length, clamp_len=args.clamp_len,
 )
-# initializer = XlInitializer()
-# model.apply(initializer)
-# model.embedder.apply(initializer) # ensure embedding init is not overridden by out_layer in case of weight sharing
+initializer = XlInitializer()
+model.apply(initializer)
+model.encoder.apply(initializer) # ensure embedding init is not overridden by out_layer in case of weight sharing
 
 args.n_all_param = sum([p.nelement() for p in model.parameters()])
 args.n_nonemb_param = sum([p.nelement() for p in model.transformer.layers.parameters()])

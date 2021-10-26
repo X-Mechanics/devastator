@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from einops import rearrange
 from modules.feedbackutils import exists, safe_cat
 from modules.feedbackmemories import FeedbackMemory
 from feedbacklayer import FeedbackLayer
@@ -23,29 +22,26 @@ class Feedback(nn.Module):
         self.pre_lnorm = pre_lnorm
 
         # main layers
-
+        self.shared_kv_proj = nn.Linear(d_model, 2 * d_head * n_head, bias=False)
         self.layers = nn.ModuleList([])
-        shared_kv_proj = None
 
         for _ in range(n_layer):
             self.layers.append(FeedbackLayer(
                 n_head=n_head, d_model=d_model, d_head=d_head, d_inner=None,
-                dropout=dropout, dropatt=dropatt
+                dropout=dropout, dropatt=dropatt, shared_kv_proj=self.shared_kv_proj
             ))
-            shared_kv_proj = self.layers[-1].init_module(shared_kv_proj=shared_kv_proj, seq_len=self.seq_len)
+            self.layers[-1].init_module()
 
         # memory parameters
 
         self.layer_weight = nn.Parameter(torch.ones(n_layer + 1))
-        self.shared_kv_proj = shared_kv_proj
         self.keep_last_hidden = keep_last_hidden
 
     def get_layer_weight(self):
         layer_weight = self.layer_weight.softmax(dim=-1)
-        layer_weight = rearrange(layer_weight, 'd -> d () () ()')
-        return layer_weight
+        return layer_weight[:, None, None, None]
 
-    def forward(self, dec_inp, pos_emb, mems, layer_weight, dec_attn_mask=None):
+    def forward(self, dec_inp, pos_emb, mems, dec_attn_mask=None):
         if exists(mems):
             memory_keys, memory_values = mems
 
@@ -63,11 +59,9 @@ class Feedback(nn.Module):
 
         # calculate new memory key / values and store to FIFO queue
 
-        if self.keep_last_hidden:  # secret option for only keeping last hidden layer, as in paper
-            agg_hiddens = hiddens[-1]
-        else:
-            hiddens = torch.stack(hiddens)
-            agg_hiddens = (hiddens * layer_weight).sum(dim=0)
+        hiddens = torch.stack(hiddens)
+        layer_weight = self.get_layer_weight()
+        agg_hiddens = (hiddens * layer_weight).sum(dim=0)
 
         # pre-calculate memory key / values and store to buffer
 

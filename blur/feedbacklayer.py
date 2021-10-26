@@ -129,7 +129,8 @@ class Attention(nn.Module):
             dim,
             heads=8,
             dim_head=64,
-            dropout=0.
+            dropout=0.,
+            shared_kv_proj=None
     ):
         super().__init__()
         self.dim = dim
@@ -138,7 +139,7 @@ class Attention(nn.Module):
 
         inner_dim = dim_head * heads
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
-        self.to_kv = nn.Linear(dim, inner_dim * 2, bias=False)
+        self.to_kv = shared_kv_proj
         self.to_out = nn.Linear(inner_dim, dim)
 
         self.dropout = nn.Dropout(dropout)
@@ -146,16 +147,13 @@ class Attention(nn.Module):
     def forward(self, x, memory, pos_emb=None):
         h, n, device = self.heads, x.shape[1], x.device
 
-        self_attend = n > 1  # only self attend if going at greater than 1 token at a time
-
         q = self.to_q(x) * self.scale
 
         k, v = memory if exists(memory) else (None, None)
 
-        if self_attend:
-            self_k, self_v = self.to_kv(x).chunk(2, dim=-1)
-            k = safe_cat(k, self_k, dim=1)
-            v = safe_cat(v, self_v, dim=1)
+        self_k, self_v = self.to_kv(x).chunk(2, dim=-1)
+        k = safe_cat(k, self_k, dim=1)
+        v = safe_cat(v, self_v, dim=1)
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=h), (q, k, v))
 
@@ -165,11 +163,10 @@ class Attention(nn.Module):
         if exists(pos_emb):
             sim = sim + pos_emb(sim)
 
-        if self_attend:
-            causal_mask = torch.ones(i, j, device=device).triu_(j - i + 1).bool()
-            causal_mask = rearrange(causal_mask, 'i j -> () () i j')
-            mask_value = -torch.finfo(q.dtype).max
-            sim.masked_fill_(causal_mask, mask_value)
+        causal_mask = torch.ones(i, j, device=device).triu_(j - i + 1).bool()
+        causal_mask = rearrange(causal_mask, 'i j -> () () i j')
+        mask_value = -torch.finfo(q.dtype).max
+        sim.masked_fill_(causal_mask, mask_value)
 
         attn = sim.softmax(dim=-1)
         attn = self.dropout(attn)
@@ -180,30 +177,20 @@ class Attention(nn.Module):
 
 
 class FeedbackLayer(nn.Module):
-    def __init__(self, n_head, d_model, d_head, d_inner, dropout, dropatt, pre_lnorm=None):
+    def __init__(self, n_head, d_model, d_head, d_inner, dropout, dropatt, shared_kv_proj, pre_lnorm=None):
         super(FeedbackLayer, self).__init__()
         self.d_model = d_model
-        self.dec_attn = Attention(dim=d_model, heads=n_head, dim_head=d_head, dropout=dropatt)
+        self.dec_attn = Attention(
+            dim=d_model, heads=n_head, dim_head=d_head, dropout=dropatt, shared_kv_proj=shared_kv_proj)
         self.pos_ff = FeedForward(dim=d_model, dropout=dropout)
 
-    def init_module(self, shared_kv_proj, seq_len):
-        shared_kv_proj = shared_kv_proj if exists(shared_kv_proj) else self.dec_attn.to_kv
-        self.dec_attn.to_kv = shared_kv_proj
-
+    def init_module(self):
         self.dec_attn, self.pos_ff = map(
             lambda fn: Residual(PreNorm(self.d_model, fn)),
             (self.dec_attn, self.pos_ff)
         )
 
-        if seq_len == 1:
-            memory_is_empty = lambda *args, **kwargs: not exists(kwargs['memory'])
-            attn = SkipIf(memory_is_empty, self.dec_attn)
-
-        return shared_kv_proj
-
     def forward(self, dec_inp, r, r_w_bias=None, r_r_bias=None, mems=None, dec_attn_mask=None):
         output = self.dec_attn(dec_inp, memory=mems, pos_emb=r)
-        #         (dec_inp, r, r_w_bias, r_r_bias, attn_mask=dec_attn_mask, mems=mems)
         output = self.pos_ff(output)
-
         return output
