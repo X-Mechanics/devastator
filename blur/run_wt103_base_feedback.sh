@@ -18,7 +18,7 @@ if [[ $1 == 'train' ]]; then
         --lr 0.00025 \
         --warmup_step 0 \
         --max_step 200000 \
-        --tgt_len 500 \
+        --tgt_len 400 \
         --mem_len 100 \
         --eval_tgt_len 500 \
         --batch_size 60 \

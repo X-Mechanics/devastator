@@ -4,6 +4,8 @@ from modules.feedbackutils import exists, safe_cat
 from modules.feedbackmemories import FeedbackMemory
 from feedbacklayer import FeedbackLayer
 
+from modules.feedbackposition import FeedbackPosition
+
 class Feedback(nn.Module):
     def __init__(
             self, n_layer, n_head, d_model, d_head=64,
@@ -21,6 +23,8 @@ class Feedback(nn.Module):
         self.same_length = same_length
         self.pre_lnorm = pre_lnorm
 
+        self.pos_emb = FeedbackPosition(causal=True, heads=n_head)
+
         # main layers
         self.shared_kv_proj = nn.Linear(d_model, 2 * d_head * n_head, bias=False)
         self.layers = nn.ModuleList([])
@@ -30,7 +34,6 @@ class Feedback(nn.Module):
                 n_head=n_head, d_model=d_model, d_head=d_head, d_inner=None,
                 dropout=dropout, dropatt=dropatt, shared_kv_proj=self.shared_kv_proj
             ))
-            self.layers[-1].init_module()
 
         # memory parameters
 
@@ -41,7 +44,22 @@ class Feedback(nn.Module):
         layer_weight = self.layer_weight.softmax(dim=-1)
         return layer_weight[:, None, None, None]
 
-    def forward(self, dec_inp, pos_emb, mems, dec_attn_mask=None):
+    def forward(self, x, memory):
+        outputs = []
+
+        # calculate weighting of layers for storing to memory
+
+        for split in x.split(self.mem_len, dim=1):
+            dec_outp = self._forward(dec_inp=split, pos_emb=self.pos_emb, mems=memory)
+
+            outputs.append(dec_outp['output'])
+            memory = dec_outp['mems']
+
+        x = torch.cat((outputs), dim=1)
+
+        return x, memory
+
+    def _forward(self, dec_inp, pos_emb, mems, dec_attn_mask=None):
         if exists(mems):
             memory_keys, memory_values = mems
 
