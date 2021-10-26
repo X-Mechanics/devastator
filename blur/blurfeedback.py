@@ -5,7 +5,7 @@ from modules.adaptiveinput import AdaptiveInput
 from modules.adaptivelogsoftmax import AdaptiveLogSoftmax
 from modules.feedbackmemories import FeedbackMemory
 from modules.feedbackutils import exists
-from feedback import Feedback
+from models.feedback import Feedback
 
 
 class BlurFeedback(nn.Module):
@@ -32,8 +32,9 @@ class BlurFeedback(nn.Module):
 
         self.encoder = AdaptiveInput(d_model=d_model, n_classes=n_token, cutoffs=cutoffs, div_value=div_val)
         self.transformer = Feedback(
-            n_layer, n_head, d_model, d_head=d_head, d_inner=d_inner, dropout=drop_out, dropatt=drop_att,
-            mem_len=mem_len, seq_len=tgt_len, keep_last_hidden=False, same_length=same_length, pre_lnorm=False
+            n_layer=n_layer, d_model=d_model, n_head=n_head, d_head=d_head, d_inner=d_inner,
+            dropout=drop_out, dropatt=drop_att, seq_len=tgt_len, mem_len=mem_len,
+            same_length=same_length
         )
         self.lm_loss = AdaptiveLogSoftmax(d_model=d_model, n_classes=n_token, cutoffs=cutoffs, div_value=div_val)
 

@@ -8,23 +8,23 @@ from modules.feedbackutils import exists, safe_cat
 class FeedbackAttention(nn.Module):
     def __init__(
             self,
-            dim,
-            heads=8,
-            dim_head=64,
-            dropout=0.,
-            shared_kv_proj=None
+            d_model: int,
+            n_head: int,
+            d_head: int,
+            drop_att: float,
+            shared_kv_proj: nn.Linear
     ):
         super().__init__()
-        self.dim = dim
-        self.heads = heads
-        self.scale = dim_head ** -0.5
+        self.dim = d_model
+        self.heads = n_head
+        self.scale = d_head ** -0.5
 
-        inner_dim = dim_head * heads
-        self.to_q = nn.Linear(dim, inner_dim, bias=False)
+        inner_dim = d_head * n_head
+        self.to_q = nn.Linear(d_model, inner_dim, bias=False)
         self.to_kv = shared_kv_proj
-        self.to_out = nn.Linear(inner_dim, dim)
+        self.to_out = nn.Linear(inner_dim, d_model)
 
-        self.dropout = nn.Dropout(dropout)
+        self.drop_att = nn.Dropout(drop_att)
 
     def forward(self, x, memory, pos_emb=None):
         h, n, device = self.heads, x.shape[1], x.device
@@ -51,7 +51,7 @@ class FeedbackAttention(nn.Module):
         sim.masked_fill_(causal_mask, mask_value)
 
         attn = sim.softmax(dim=-1)
-        attn = self.dropout(attn)
+        attn = self.drop_att(attn)
 
         out = einsum('b h i j, b h j d -> b h i d', attn, v)
         out = rearrange(out, 'b h n d -> b n (h d)')

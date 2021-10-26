@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
 
+from models.xllayer import XlLayer
+from models.fnetarlayer import FnetarLayer
 from modules.xlmask import XlMask
 from modules.xlmemory import XlMemory
 from modules.xlposition import XlPosition
-from xllayer import XlLayer
-from fnetarlayer import FnetarLayer
+
 
 class Fnetar(nn.Module):
     def __init__(

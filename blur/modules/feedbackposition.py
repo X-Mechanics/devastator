@@ -6,16 +6,16 @@ from einops import rearrange
 class FeedbackPosition(nn.Module):
     def __init__(
             self,
-            causal=False,
+            n_head: int,
             num_buckets=32,
             max_distance=128,
-            heads=8
+            causal=False,
     ):
         super().__init__()
         self.causal = causal
         self.num_buckets = num_buckets
         self.max_distance = max_distance
-        self.relative_attention_bias = nn.Embedding(num_buckets, heads)
+        self.relative_attention_bias = nn.Embedding(num_buckets, n_head)
 
     @staticmethod
     def _relative_position_bucket(relative_position, causal=True, num_buckets=32, max_distance=128):

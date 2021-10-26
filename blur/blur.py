@@ -4,7 +4,7 @@ import torch.nn as nn
 from modules.adaptiveinput import AdaptiveInput
 from modules.adaptivelogsoftmax import AdaptiveLogSoftmax
 from modules.xlmemory import XlMemory
-from xl import Xl
+from models.xl import Xl
 
 class Blur(nn.Module):
     def __init__(

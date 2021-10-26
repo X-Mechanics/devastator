@@ -3,10 +3,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modules.xlposition import XlPosition
-# from xlposition import XlPosition
 
 class XlAttention(nn.Module):
-    def __init__(self, d_model: int, n_head: int, d_head: int, drop_out: float, drop_att: float=0.):
+    def __init__(
+            self,
+            d_model: int,
+            n_head: int,
+            d_head: int,
+            drop_out: float,
+            drop_att: float=0.
+    ):
         super(XlAttention, self).__init__()
 
         self.n_head = n_head

@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
-from collections import namedtuple
-
-FeedbackMemory = namedtuple('Memory', ['keys', 'values'])
+from modules.feedbackmemory import FeedbackMemory
 
 class FeedbackMemories(nn.Module):
     def __init__(

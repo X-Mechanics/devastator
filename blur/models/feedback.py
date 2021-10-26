@@ -1,44 +1,45 @@
 import torch
 import torch.nn as nn
-from modules.feedbackutils import exists, safe_cat
+from models.feedbacklayer import FeedbackLayer
 from modules.feedbackmemories import FeedbackMemory
-from feedbacklayer import FeedbackLayer
-
 from modules.feedbackposition import FeedbackPosition
+from modules.feedbackutils import exists, safe_cat
+
 
 class Feedback(nn.Module):
     def __init__(
-            self, n_layer, n_head, d_model, d_head=64,
-            d_inner=None, dropout=0., dropatt=0.,
-            mem_len=150, seq_len=150, keep_last_hidden=False,
-            same_length=False, pre_lnorm=False):
+            self,
+            n_layer: int,
+            d_model: int,
+            n_head: int,
+            d_head: int,
+            d_inner: int,
+            dropout: float,
+            dropatt: float,
+            seq_len: int,
+            mem_len: int,
+            same_length=False,
+    ):
         super(Feedback, self).__init__()
-        self.n_layer = n_layer
-        self.d_model = d_model
-        self.n_head = n_head
-        self.d_head = d_head
-        self.d_inner = d_inner
         self.seq_len = seq_len
         self.mem_len = mem_len
         self.same_length = same_length
-        self.pre_lnorm = pre_lnorm
 
-        self.pos_emb = FeedbackPosition(causal=True, heads=n_head)
+        self.position = FeedbackPosition(n_head=n_head, causal=True)
 
-        # main layers
         self.shared_kv_proj = nn.Linear(d_model, 2 * d_head * n_head, bias=False)
+
         self.layers = nn.ModuleList([])
 
         for _ in range(n_layer):
             self.layers.append(FeedbackLayer(
-                n_head=n_head, d_model=d_model, d_head=d_head, d_inner=None,
-                dropout=dropout, dropatt=dropatt, shared_kv_proj=self.shared_kv_proj
+                d_model=d_model, n_head=n_head, d_head=d_head, d_inner=d_inner,
+                drop_out=dropout, drop_att=dropatt, shared_kv_proj=self.shared_kv_proj
             ))
 
         # memory parameters
 
         self.layer_weight = nn.Parameter(torch.ones(n_layer + 1))
-        self.keep_last_hidden = keep_last_hidden
 
     def get_layer_weight(self):
         layer_weight = self.layer_weight.softmax(dim=-1)
@@ -50,7 +51,7 @@ class Feedback(nn.Module):
         # calculate weighting of layers for storing to memory
 
         for split in x.split(self.mem_len, dim=1):
-            dec_outp = self._forward(dec_inp=split, pos_emb=self.pos_emb, mems=memory)
+            dec_outp = self._forward(dec_inp=split, pos_emb=self.position, mems=memory)
 
             outputs.append(dec_outp['output'])
             memory = dec_outp['mems']
@@ -72,7 +73,7 @@ class Feedback(nn.Module):
             memory = (memory_keys, memory_values)
 
         for layer in self.layers:
-            dec_outp = layer(dec_inp=dec_outp, r=pos_emb, mems=memory)
+            dec_outp = layer(x=dec_outp, mem=memory, position=pos_emb)
             hiddens.append(dec_outp)
 
         # calculate new memory key / values and store to FIFO queue

@@ -167,7 +167,8 @@ if args.adaptive:
 ###############################################################################
 # Build the model
 ###############################################################################
-from xlinitializer import XlInitializer
+from normaluniforminitializer import NormalUniformInitializer
+
 
 model = BlurFeedback(
     ntokens, args.n_layer, args.n_head, args.d_model,
@@ -176,7 +177,7 @@ model = BlurFeedback(
     tgt_len=args.tgt_len, ext_len=args.ext_len, mem_len=args.mem_len,
     cutoffs=cutoffs, same_length=args.same_length, clamp_len=args.clamp_len,
 )
-initializer = XlInitializer()
+initializer = NormalUniformInitializer()
 model.apply(initializer)
 model.encoder.apply(initializer) # ensure embedding init is not overridden by out_layer in case of weight sharing
 

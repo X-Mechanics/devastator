@@ -8,13 +8,13 @@ class GEGLU(nn.Module):
         return F.gelu(gate) * x
 
 class GatedFeedForward(nn.Module):
-    def __init__(self, dim, mult=4, dropout=0.):
+    def __init__(self, d_in: int, d_inner: int, drop=0.):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(dim, dim * mult * 2),
+            nn.Linear(d_in, 2 * d_inner),
             GEGLU(),
-            nn.Dropout(dropout),
-            nn.Linear(dim * mult, dim)
+            nn.Dropout(drop),
+            nn.Linear(d_inner, d_in)
         )
 
     def forward(self, x):

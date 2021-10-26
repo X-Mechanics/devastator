@@ -4,7 +4,7 @@ import torch.nn as nn
 from modules.adaptiveinput import AdaptiveInput
 from modules.adaptivelogsoftmax import AdaptiveLogSoftmax
 from modules.xlmemory import XlMemory
-from fnetar import Fnetar
+from models.fnetar import Fnetar
 
 class BlurFnetar(nn.Module):
     def __init__(

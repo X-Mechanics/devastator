@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-class XlInitializer:
+class NormalUniformInitializer:
     def __init__(self, init: str='normal', init_range: float=0.1, init_std: float=0.02):
         self.init = init
         self.init_range = init_range

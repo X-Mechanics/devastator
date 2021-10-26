@@ -4,7 +4,13 @@ import torch.nn.functional as F
 import numpy as np
 
 class FnetarAttention(nn.Module):
-    def __init__(self, tgt_len: int, mem_len: int, dropout=0.1, same_length=True):
+    def __init__(
+            self,
+            tgt_len: int,
+            mem_len: int,
+            dropout=0.1,
+            same_length=True
+    ):
         super(FnetarAttention, self).__init__()
         self.dropout = nn.Dropout(dropout)
         self.same_length = same_length

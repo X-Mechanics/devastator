@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 
+from models.xllayer import XlLayer
 from modules.xlmask import XlMask
 from modules.xlmemory import XlMemory
 from modules.xlposition import XlPosition
-from xllayer import XlLayer
+
 
 class Xl(nn.Module):
     def __init__(
