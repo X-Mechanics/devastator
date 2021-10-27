@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 from blur import Blur
 from modules.xlmemories import XlMemories
+from modules.feedbackmemories import FeedbackMemories
 
 from utils.data_utils import get_lm_corpus
 from utils.exp_utils import create_exp_dir
@@ -84,7 +85,7 @@ parser.add_argument('--mem_len', type=int, default=0,
                     help='length of the retained previous heads')
 parser.add_argument('--not_tied', action='store_true',
                     help='do not tie the word embedding and softmax weights')
-parser.add_argument('--seed', type=int, default=1111,
+parser.add_argument('--seed', type=int, default=1234,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
@@ -98,7 +99,7 @@ parser.add_argument('--multi_gpu', action='store_true',
                     help='use multiple GPU')
 parser.add_argument('--log-interval', type=int, default=200,
                     help='report interval')
-parser.add_argument('--eval-interval', type=int, default=4000,
+parser.add_argument('--eval-interval', type=int, default=1000,
                     help='evaluation interval')
 parser.add_argument('--work_dir', default='LM-TFM', type=str,
                     help='experiment directory.')
@@ -149,8 +150,29 @@ corpus = get_lm_corpus(args.data, args.dataset)
 ntokens = len(corpus.vocab)
 args.n_token = ntokens
 
+from configs.fnetarconfig import FnetarConfig
+from configs.feedbackconfig import FeedbackConfig
+from configs.xlconfig import XlConfig
+from configs.xladaptiveconfig import XlAdaptiveConfig
+from configs.feedbackadaptiveconfig import FeedbackAdaptiveConfig
+
+
+from models.feedback import Feedback
+from models.fnetar import Fnetar
+from models.xl import Xl
+from modules.feedbackmemories import FeedbackMemories
+from modules.adaptiveinput import AdaptiveInput
+from modules.adaptivelogsoftmax import AdaptiveLogSoftmax
+import dataclasses
+
+xl_adaptive_config = XlAdaptiveConfig(n_classes=len(corpus.vocab))
+feedback_adaptive_config = FeedbackAdaptiveConfig(n_classes=len(corpus.vocab))
+xl_config = XlConfig()
+fnetar_config = FnetarConfig()
+feedback_config = FeedbackConfig()
+
 eval_batch_size = 10
-tr_iter = corpus.get_iterator('train', args.batch_size, args.tgt_len,
+tr_iter = corpus.get_iterator('train', args.batch_size, feedback_config.tgt_len,
     device=device, ext_len=args.ext_len)
 va_iter = corpus.get_iterator('valid', eval_batch_size, args.eval_tgt_len,
     device=device, ext_len=args.ext_len)
@@ -171,16 +193,14 @@ if args.adaptive:
 from normaluniforminitializer import NormalUniformInitializer
 
 
-model = Blur(
-    ntokens, args.n_layer, args.n_head, args.d_model,
-    args.d_head, args.d_inner, args.dropout, args.dropatt,
-    tie_weight=args.tied, d_embed=args.d_embed, div_val=args.div_val,
-    tgt_len=args.tgt_len, ext_len=args.ext_len, mem_len=args.mem_len,
-    cutoffs=cutoffs,same_length=args.same_length, clamp_len=args.clamp_len,
-)
+encoder = AdaptiveInput(**dataclasses.asdict(feedback_adaptive_config))
+decoder = AdaptiveLogSoftmax(**dataclasses.asdict(feedback_adaptive_config))
+transformer = Feedback(**dataclasses.asdict(feedback_config))
+
+model = Blur(encoder=encoder, transformer=transformer, decoder=decoder, tie_weight=args.tied)
 initializer = NormalUniformInitializer()
 model.apply(initializer)
-model.embedder.apply(initializer) # ensure embedding init is not overridden by out_layer in case of weight sharing
+model.encoder.apply(initializer) # ensure embedding init is not overridden by out_layer in case of weight sharing
 
 args.n_all_param = sum([p.nelement() for p in model.parameters()])
 args.n_nonemb_param = sum([p.nelement() for p in model.transformer.layers.parameters()])
@@ -226,14 +246,15 @@ def evaluate(eval_iter):
     # Evaluation
     total_len, total_loss = 0, 0.
 
-    eval_memories = XlMemories(
-        n_stream=1,
-        n_layer=args.n_layer,
-        tgt_len=eval_tgt_len,
-        mem_len=eval_mem_len,
-        ext_len=eval_ext_len,
-        dtype=next(model.parameters()).dtype
-    )
+    eval_memories = FeedbackMemories(n_stream=1)
+    # eval_memories = XlMemories(
+    #     n_stream=1,
+    #     n_layer=args.n_layer,
+    #     tgt_len=eval_tgt_len,
+    #     mem_len=eval_mem_len,
+    #     ext_len=eval_ext_len,
+    #     dtype=next(model.parameters()).dtype
+    # )
 
     with torch.no_grad():
 
@@ -258,14 +279,15 @@ def train():
     global train_step, train_loss, best_val_loss, eval_start_time, log_start_time
     model.train()
 
-    memories = XlMemories(
-        n_stream=args.batch_chunk,
-        n_layer=args.n_layer,
-        tgt_len=args.tgt_len,
-        mem_len=args.mem_len,
-        ext_len=args.ext_len,
-        dtype=next(model.parameters()).dtype
-    )
+    memories = FeedbackMemories(n_stream=args.batch_chunk)
+    # memories = XlMemories(
+    #     n_stream=args.batch_chunk,
+    #     n_layer=args.n_layer,
+    #     tgt_len=args.tgt_len,
+    #     mem_len=args.mem_len,
+    #     ext_len=args.ext_len,
+    #     dtype=next(model.parameters()).dtype
+    # )
 
     train_iter = tr_iter
     for batch, (data, target, seq_len) in tqdm(enumerate(train_iter), total=len(train_iter) // args.batch_chunk):

@@ -8,63 +8,40 @@ from models.xl import Xl
 
 class Blur(nn.Module):
     def __init__(
-            self,
-            n_token: int,
-            n_layer: int,
-            n_head: int,
-            d_model: int,
-            d_head: int,
-            d_inner: int,
-            drop_out: float,
-            drop_att: float,
+            self, encoder, transformer, decoder,
             tie_weight: bool=True,
-            d_embed: int=None,
-            div_val: int=1,
-            tgt_len: int=None,
-            ext_len: int=None,
-            mem_len: int=None,
-            cutoffs: list=[],
-            same_length: bool=False,
-            clamp_len: int=-1,
     ):
         super(Blur, self).__init__()
-        self.n_token = n_token
-        self.n_layer = n_layer
-        self.n_head = n_head
-        self.d_head = d_head
-
-        d_embed = d_model if d_embed is None else d_embed
-        self.d_embed = d_embed
-        self.d_model = d_model
-
-        self.embedder = AdaptiveInput(d_model=d_model, n_classes=n_token, cutoffs=cutoffs, div_value=div_val)
-        self.transformer = Xl(
-            n_layer=n_layer, d_model=d_model, n_head=n_head, d_head=d_head, d_inner=d_inner,
-            drop_out=drop_out, drop_att=drop_att, tgt_len=tgt_len, mem_len=mem_len,
-            same_length=same_length, clamp_len=clamp_len
-        )
-        self.predictor = AdaptiveLogSoftmax(d_model=d_model, n_classes=n_token, cutoffs=cutoffs, div_value=div_val)
-        self.drop_out = nn.Dropout(drop_out)
+        self.encoder = encoder
+        self.transformer = transformer
+        self.decoder = decoder
+        self.dropout = nn.Dropout(0.1)
+        # self.encoder = AdaptiveInput(d_model=d_model, n_classes=n_token, cutoffs=cutoffs, div_value=div_val)
+        # self.transformer = Xl(
+        #     n_layer=n_layer, d_model=d_model, n_head=n_head, d_head=d_head, d_inner=d_inner,
+        #     drop_out=drop_out, drop_att=drop_att, tgt_len=tgt_len, mem_len=mem_len,
+        #     same_length=same_length, clamp_len=clamp_len
+        # )
+        # self.decoder = AdaptiveLogSoftmax(d_model=d_model, n_classes=n_token, cutoffs=cutoffs, div_value=div_val)
 
         if tie_weight:
             self._tie_weights()
 
 
     def forward(self, x, y: torch.Tensor, memory: XlMemory) -> (torch.Tensor, XlMemory):
-        x = self.embedder(x)
-        x = self.drop_out(x)
-
+        x = self.encoder(x)
+        # x = self.dropout(x)
         x, new_memory = self.transformer(x=x, memory=memory)
 
-        output = self.predictor(x.view(-1, x.size(-1)), y.view(-1))
+        output = self.decoder(x.view(-1, x.size(-1)), y.view(-1))
         loss = -output.output.view(y.size(1), -1)
 
         return loss, new_memory
 
     def _tie_weights(self):
-        self.embedder.head.weight = self.predictor.head.weight
-        for i in range(len(self.embedder.cutoffs) - 1):
-            self.embedder.tail[i].weight = self.predictor.tail[i].weight
+        self.encoder.head.weight = self.decoder.head.weight
+        for i in range(len(self.encoder.cutoffs) - 1):
+            self.encoder.tail[i].weight = self.decoder.tail[i].weight
 
 if __name__ == '__main__':
     import argparse

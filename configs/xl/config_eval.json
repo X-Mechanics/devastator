@@ -1,9 +1,0 @@
-{
-  "data": "test_data/blur/wikitext-103",
-  "dataset": "wt103",
-  "cuda": true,
-  "tgt_len": 64,
-  "mem_len": 640,
-  "same_length": true,
-  "split": "test"
-}

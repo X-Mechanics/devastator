@@ -14,14 +14,14 @@ class Feedback(nn.Module):
             n_head: int,
             d_head: int,
             d_inner: int,
-            dropout: float,
-            dropatt: float,
-            seq_len: int,
+            drop_out: float,
+            drop_att: float,
+            tgt_len: int,
             mem_len: int,
             same_length=False,
     ):
         super(Feedback, self).__init__()
-        self.seq_len = seq_len
+        self.seq_len = tgt_len
         self.mem_len = mem_len
         self.same_length = same_length
 
@@ -34,7 +34,7 @@ class Feedback(nn.Module):
         for _ in range(n_layer):
             self.layers.append(FeedbackLayer(
                 d_model=d_model, n_head=n_head, d_head=d_head, d_inner=d_inner,
-                drop_out=dropout, drop_att=dropatt, shared_kv_proj=self.shared_kv_proj
+                drop_out=drop_out, drop_att=drop_att, shared_kv_proj=self.shared_kv_proj
             ))
 
         # memory parameters
