@@ -14,7 +14,8 @@ class GatedFeedForward(nn.Module):
             nn.Linear(d_in, 2 * d_inner),
             GEGLU(),
             nn.Dropout(drop),
-            nn.Linear(d_inner, d_in)
+            nn.Linear(d_inner, d_in),
+            nn.Dropout(drop)
         )
 
     def forward(self, x):

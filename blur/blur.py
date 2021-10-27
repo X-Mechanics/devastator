@@ -30,7 +30,7 @@ class Blur(nn.Module):
 
     def forward(self, x, y: torch.Tensor, memory: XlMemory) -> (torch.Tensor, XlMemory):
         x = self.encoder(x)
-        # x = self.dropout(x)
+        x = self.dropout(x)
         x, new_memory = self.transformer(x=x, memory=memory)
 
         output = self.decoder(x.view(-1, x.size(-1)), y.view(-1))
