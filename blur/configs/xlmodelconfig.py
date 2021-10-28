@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 @dataclass
-class XlConfig:
+class XlModelConfig:
     n_layer: int = 16
     d_model: int = 410
     n_head: int = 10

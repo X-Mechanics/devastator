@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 @dataclass
-class FeedbackConfig:
+class FeedbackModelConfig:
     n_layer: int = 6
     d_model: int = 512
     n_head: int = 10

@@ -1,9 +1,7 @@
-
-
 from dataclasses import dataclass
 
 @dataclass
-class FnetarConfig:
+class FnetarModelConfig:
     n_layer: int = 16
     d_model: int = 410
     n_head: int = 10
