@@ -1,12 +1,32 @@
-# Blur: Transformers for text (or any symbolic) data
+## Blur: Transformers for text data
 
-This repository contains the code in both **PyTorch**. The boiler-plate code is based on
->[Transformer-XL: Attentive Language Models Beyond a Fixed-Length Context](http://arxiv.org/abs/1901.02860)
+### Reproducing [Wikitext-103 benchmarks](https://paperswithcode.com/sota/language-modelling-on-wikitext-103)
 
->Zihang Dai\*, Zhilin Yang\*, Yiming Yang, Jaime Carbonell, Quoc V. Le, Ruslan Salakhutdinov (*: equal contribution)
+- Download the wikitext-103 dataset
 
->Preprint 2018
+```bash
+user@device$ cd download_path/devastator/
+user@device:/devastator$ ./get_data_wt103.sh
+```
 
-## Introduction
+- To reproduce the result from [Transformer-XL](http://arxiv.org/abs/1901.02860) (ppl ~ 24)
+  
+```bash
+user@device:/devastator$ cd blur
+user@device:/devastator/blur$ python train.py --model_name xl
+```
 
-This directory contains our pytorch implementation of Transformer-XL.
+
+- To reproduce the result from [FNetAR](http://arxiv.org/abs/2107.10932) (ppl ~ 25)
+  
+```bash
+user@device:/devastator$ cd blur
+user@device:/devastator/blur$ python train.py --model_name fnetar
+```
+
+- To reproduce the result from [Feedback Transformer](http://arxiv.org/abs/2002.09402) (ppl < 21)
+  
+```bash
+user@device:/devastator$ cd blur
+user@device:/devastator/blur$ python train.py --model_name feedback
+```

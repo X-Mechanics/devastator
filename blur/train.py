@@ -43,6 +43,7 @@ parser = argparse.ArgumentParser(description='PyTorch Transformer Language Model
 parser.add_argument('--model_name', type=str, choices=['xl', 'fnetar', 'feedback'], help='optimizer to use.')
 parser.add_argument('--dataset', default='wt103', type=str, help='data')
 parser.add_argument('--data', default='../data/wikitext-103', type=str, help='dataset')
+parser.add_argument('--cuda_device', default='cuda', type=str, help='which cuda')
 
 args = parser.parse_args()
 print('Training new {} model'.format(args.model_name))
@@ -62,7 +63,7 @@ if torch.cuda.is_available():
         device = torch.device('cpu')
         print('WARNING: You have a CUDA device, so you should probably run with --cuda')
     else:
-        device = torch.device('cuda')
+        device = torch.device(args.cuda_device)
         torch.cuda.manual_seed_all(run_config.seed)
 else:
     device = torch.device('cpu')
