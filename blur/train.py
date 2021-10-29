@@ -3,10 +3,11 @@ import time
 import math
 import os
 import itertools
-import dataclasses
 import torch
 import torch.optim as optim
 import numpy as np
+import dataclasses
+from dataclasses import dataclass
 from tqdm import tqdm
 
 from configs.xlmodelconfig import XlModelConfig
@@ -19,8 +20,10 @@ from configs.feedbackadaptiveconfig import FeedbackAdaptiveConfig
 from configs.xldataconfig import XlDataConfig
 from configs.feedbackdataconfig import FeedbackDataConfig
 
+from configs.xloptimizerconfig import XlOptimizerConfig
+from configs.feedbackoptimizerconfig import FeedbackOptimizerConfig
+
 from configs.runconfig import RunConfig
-from configs.optimizerconfig import OptimizerConfig
 
 from blur import Blur
 
@@ -49,7 +52,7 @@ args = parser.parse_args()
 print('Training new {} model'.format(args.model_name))
 
 run_config = RunConfig()
-optimizer_config = OptimizerConfig()
+optimizer_config = XlOptimizerConfig()
 
 run_config.work_dir = os.path.join(run_config.work_dir, time.strftime('%Y%m%d-%H%M%S'))
 logging = create_exp_dir(run_config.work_dir, scripts_to_save=['train.py', 'blur.py'], debug=run_config.debug)

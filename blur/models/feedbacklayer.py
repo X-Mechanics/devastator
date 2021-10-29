@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import Union
 from modules.feedbackmemory import FeedbackMemory
 from modules.feedbackposition import FeedbackPosition
 from modules.feedbackattention import FeedbackAttention
@@ -14,7 +15,7 @@ class FeedbackLayer(nn.Module):
             d_inner: int,
             drop_out: float,
             drop_att: float,
-            shared_kv_proj: nn.Linear
+            shared_kv_proj: Union[nn.Linear, None] = None
     ):
         super(FeedbackLayer, self).__init__()
         

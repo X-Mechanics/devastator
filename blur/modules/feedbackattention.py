@@ -12,7 +12,7 @@ class FeedbackAttention(nn.Module):
             n_head: int,
             d_head: int,
             drop_att: float,
-            shared_kv_proj: nn.Linear
+            shared_kv_proj: nn.Linear = None
     ):
         super().__init__()
         self.dim = d_model
@@ -21,7 +21,10 @@ class FeedbackAttention(nn.Module):
 
         inner_dim = d_head * n_head
         self.to_q = nn.Linear(d_model, inner_dim, bias=False)
-        self.to_kv = shared_kv_proj
+        if shared_kv_proj is not None:
+            self.to_kv = shared_kv_proj
+        else:
+            self.to_kv = nn.Linear(d_model, 2 * d_head * n_head, bias=False)
         self.to_out = nn.Linear(inner_dim, d_model)
 
         self.drop_att = nn.Dropout(drop_att)

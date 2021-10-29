@@ -50,7 +50,7 @@ class Feedback(nn.Module):
 
         # calculate weighting of layers for storing to memory
 
-        for split in x.split(self.mem_len, dim=1):
+        for split in x.split(self.seq_len, dim=1):
             dec_outp = self._forward(dec_inp=split, pos_emb=self.position, mems=memory)
 
             outputs.append(dec_outp['output'])
